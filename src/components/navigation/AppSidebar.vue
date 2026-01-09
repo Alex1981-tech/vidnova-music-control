@@ -36,10 +36,10 @@ const navItems = computed(() => {
         <div class="sidebar-header" @click="router.push('/')">
           <img
             src="@/assets/icon.svg"
-            alt="Music Assistant"
+            alt="Media Assistant"
             class="sidebar-header-logo"
           />
-          <div class="sidebar-header-title">Music Assistant</div>
+          <div class="sidebar-header-title">Media Assistant</div>
         </div>
       </SidebarMenu>
     </SidebarHeader>

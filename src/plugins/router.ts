@@ -196,6 +196,47 @@ const routes = [
         ],
       },
       {
+        path: "/schedule",
+        children: [
+          {
+            path: "",
+            name: "schedule",
+            component: () =>
+              import(
+                /* webpackChunkName: "schedule" */ "@/views/ScheduleView.vue"
+              ),
+            props: true,
+          },
+          {
+            path: "new",
+            name: "schedule-new",
+            component: () =>
+              import(
+                /* webpackChunkName: "schedule-edit" */ "@/views/ScheduleEditView.vue"
+              ),
+            props: true,
+          },
+          {
+            path: ":id/edit",
+            name: "schedule-edit",
+            component: () =>
+              import(
+                /* webpackChunkName: "schedule-edit" */ "@/views/ScheduleEditView.vue"
+              ),
+            props: true,
+          },
+        ],
+      },
+      {
+        path: "/video",
+        name: "video",
+        component: () =>
+          import(
+            /* webpackChunkName: "video" */ "@/views/VideoFilesView.vue"
+          ),
+        props: (route: { query: Record<string, any> }) => ({ ...route.query }),
+      },
+      {
         path: "/settings",
         name: "settings",
         component: () =>

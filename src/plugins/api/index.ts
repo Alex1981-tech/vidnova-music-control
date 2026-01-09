@@ -2354,6 +2354,107 @@ export class MusicAssistantApi {
 
     return null;
   }
+
+  // ========== Media Files API ==========
+
+  public async uploadMediaFile(
+    fileData: string,
+    fileName: string,
+    mediaType: "music" | "video",
+    folderPath: string = "",
+  ): Promise<{
+    id: string;
+    name: string;
+    path: string;
+    size: number;
+    media_type: string;
+  }> {
+    return this.sendCommand("media_files/upload", {
+      file_data: fileData,
+      file_name: fileName,
+      media_type: mediaType,
+      folder_path: folderPath,
+    });
+  }
+
+  public async createMediaFolder(
+    folderName: string,
+    mediaType: "music" | "video",
+    parentPath: string = "",
+  ): Promise<{ name: string; path: string; media_type: string }> {
+    return this.sendCommand("media_files/create_folder", {
+      folder_name: folderName,
+      media_type: mediaType,
+      parent_path: parentPath,
+    });
+  }
+
+  public async deleteMediaItem(
+    path: string,
+    mediaType: "music" | "video",
+  ): Promise<boolean> {
+    return this.sendCommand("media_files/delete", {
+      path,
+      media_type: mediaType,
+    });
+  }
+
+  public async browseMediaFiles(
+    mediaType: "music" | "video",
+    folderPath: string = "",
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      path: string;
+      is_folder: boolean;
+      media_type: string;
+      size: number;
+      uri: string;
+      children_count?: number;
+    }>
+  > {
+    return this.sendCommand("media_files/browse", {
+      media_type: mediaType,
+      folder_path: folderPath,
+    });
+  }
+
+  public async moveMediaItem(
+    sourcePath: string,
+    destFolder: string,
+    mediaType: "music" | "video",
+  ): Promise<{
+    name: string;
+    old_path: string;
+    new_path: string;
+    media_type: string;
+  }> {
+    return this.sendCommand("media_files/move", {
+      source_path: sourcePath,
+      dest_folder: destFolder,
+      media_type: mediaType,
+    });
+  }
+
+  public async listMediaFolders(
+    mediaType: "music" | "video",
+  ): Promise<Array<{ name: string; path: string }>> {
+    return this.sendCommand("media_files/list_folders", {
+      media_type: mediaType,
+    });
+  }
+
+  public async getMediaFilesInfo(): Promise<{
+    music_path: string;
+    video_path: string;
+    music_count: number;
+    video_count: number;
+    music_size: number;
+    video_size: number;
+  }> {
+    return this.sendCommand("media_files/info");
+  }
 }
 
 export const api = new MusicAssistantApi();

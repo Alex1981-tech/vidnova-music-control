@@ -17,10 +17,10 @@
         <div v-if="store.mobileLayout && home" class="mobile-brand">
           <img
             src="@/assets/icon.svg"
-            alt="Music Assistant"
+            alt="Media Assistant"
             class="mobile-brand-logo"
           />
-          <span class="mobile-brand-text">Music Assistant</span>
+          <span class="mobile-brand-text">Media Assistant</span>
         </div>
         <button v-else-if="title" @click="emit('titleClicked')">
           {{ title }}

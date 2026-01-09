@@ -2,6 +2,7 @@ import { DEFAULT_MENU_ITEMS } from "@/constants";
 import { store } from "@/plugins/store";
 import {
   BookAudio,
+  CalendarClock,
   Disc3,
   Folder,
   House,
@@ -12,6 +13,7 @@ import {
   Search,
   Settings,
   UserRound,
+  Video,
 } from "lucide-vue-next";
 import { Component } from "vue";
 
@@ -108,6 +110,22 @@ export const getMenuItems = function () {
         path: "/radios",
         isLibraryNode: true,
         hidden: store.libraryRadiosCount === 0,
+      });
+    }
+    if (enabledMenuItemStr === "schedule") {
+      items.push({
+        label: "schedule.title",
+        icon: CalendarClock,
+        path: "/schedule",
+        isLibraryNode: false,
+      });
+    }
+    if (enabledMenuItemStr === "video") {
+      items.push({
+        label: "video_files.title",
+        icon: Video,
+        path: "/video",
+        isLibraryNode: false,
       });
     }
     if (enabledMenuItemStr === "browse") {

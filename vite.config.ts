@@ -80,6 +80,16 @@ export default defineConfig({
     port: 3000,
     host: true,
   },
+  optimizeDeps: {
+    include: [
+      "vuetify",
+      "vuetify/components",
+      "vuetify/directives",
+      "vue-i18n",
+      "vue-router",
+      "@vueuse/core",
+    ],
+  },
   build: {
     outDir: "./music_assistant_frontend",
     rollupOptions: {

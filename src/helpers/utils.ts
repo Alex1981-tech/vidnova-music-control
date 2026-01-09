@@ -789,10 +789,16 @@ export const handleMediaItemClick = function (
 
   // folder items always open in browse view
   if (item.media_type == MediaType.FOLDER) {
+    const folderPath = (item as BrowseFolder).path;
+    // Special handling for Video Assistant
+    if (folderPath === "video://" || folderPath?.startsWith("video://")) {
+      router.push({ name: "video" });
+      return;
+    }
     router.push({
       name: "browse",
       query: {
-        path: (item as BrowseFolder).path,
+        path: folderPath,
       },
     });
     return;
