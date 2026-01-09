@@ -1,23 +1,26 @@
-name: Deploy Media Assistant Server
+name: Deploy Music Assistant Server
 
 on:
   push:
     branches:
       - main
-      - master
   workflow_dispatch:
+
+env:
+  DEPLOY_PATH: /home/serv/music-assistant
 
 jobs:
   deploy:
     name: Deploy to Production
     runs-on: self-hosted
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Sync code to server
         run: |
-          sudo rsync -av --delete \
+          rsync -av --delete \
             --exclude '.git' \
             --exclude 'data' \
             --exclude 'logs' \
@@ -25,44 +28,42 @@ jobs:
             --exclude '__pycache__' \
             --exclude '*.pyc' \
             --exclude '.cache' \
-            ./ /root/server-2.8.0.dev2026010704/
-
-      - name: Stop old container
-        run: |
-          sudo docker stop media-assistant-server 2>/dev/null || true
-          sudo docker rm media-assistant-server 2>/dev/null || true
+            --exclude 'deploy.log' \
+            ./ $DEPLOY_PATH/
 
       - name: Build Docker image
         run: |
-          cd /root/server-2.8.0.dev2026010704
-          sudo docker build --no-cache -f Dockerfile.prod -t media-assistant-server:latest .
+          cd $DEPLOY_PATH
+          docker compose build
 
-      - name: Start container
+      - name: Restart container
         run: |
-          sudo docker run -d \
-            --name media-assistant-server \
-            --restart unless-stopped \
-            --network host \
-            -v /root/.musicassistant:/data \
-            -e TZ=Europe/Kyiv \
-            media-assistant-server:latest
+          cd $DEPLOY_PATH
+          docker compose down
+          docker compose up -d
 
-      - name: Wait for container to start
+      - name: Wait for startup
         run: |
-          echo "⏳ Waiting for Media Assistant to start..."
-          sleep 30
+          echo "Waiting for Music Assistant to start..."
+          sleep 20
 
-      - name: Verify deployment
+      - name: Health check
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8095/ || echo "000")
           if [ "$STATUS" = "200" ] || [ "$STATUS" = "101" ]; then
-            echo "✅ Media Assistant is responding on port 8095"
+            echo "Music Assistant is responding on port 8095"
           else
-            echo "⚠️ Status: $STATUS - checking logs..."
-            sudo docker logs media-assistant-server --tail 50
+            echo "Status: $STATUS - checking logs..."
+            docker logs music-assistant-server --tail 50
+            exit 1
           fi
 
-      - name: Cleanup
+      - name: Show deployed version
         run: |
-          sudo docker image prune -f
-          echo "✅ Old images cleaned up"
+          echo "Deployed commit: $(git rev-parse --short HEAD)"
+          docker ps | grep music-assistant
+
+      - name: Cleanup old images
+        run: |
+          docker image prune -f
+          echo "Old images cleaned up"
