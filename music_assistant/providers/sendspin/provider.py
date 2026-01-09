@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 from aiosendspin.server import ClientAddedEvent, ClientRemovedEvent, SendspinEvent, SendspinServer
+
+DEFAULT_SENDSPIN_PORT = 8927
 from music_assistant_models.enums import ProviderFeature
 
 from music_assistant.mass import MusicAssistant
@@ -89,8 +92,9 @@ class SendspinProvider(PlayerProvider):
         await super().loaded_in_mass()
         # Start server for handling incoming Sendspin connections from clients
         # and mDNS discovery of new clients
+        sendspin_port = int(os.environ.get("SENDSPIN_PORT", DEFAULT_SENDSPIN_PORT))
         await self.server_api.start_server(
-            port=8927,
+            port=sendspin_port,
             host=self.mass.streams.bind_ip,
             advertise_addresses=[cast("str", self.mass.streams.publish_ip)],
         )
