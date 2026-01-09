@@ -102,7 +102,6 @@ class LinkPlayPlayer(Player):
     async def play_media(self, media: PlayerMedia) -> None:
         """Play media on the player."""
         import asyncio
-        from urllib.parse import quote
 
         self.logger.info("🎵 PLAY_MEDIA CALLED on %s: %s", self.display_name, media.uri)
 
@@ -112,19 +111,25 @@ class LinkPlayPlayer(Player):
         # Small delay to allow stop to complete
         await asyncio.sleep(0.5)
 
-        # URL-encode the media URI for the LinkPlay API
-        encoded_uri = quote(media.uri, safe=':/?&=')
-        self.logger.info("🎵 Playing encoded URI: %s", encoded_uri)
+        # Switch to wifi mode for URL streaming
+        await self._send_command("setPlayerCmd:switchmode:wifi")
+        await asyncio.sleep(0.3)
 
-        # Set URL to play using m3u command which is more reliable for streams
-        result = await self._send_command(f"setPlayerCmd:m3u:play:{encoded_uri}")
+        # IMPORTANT: LinkPlay firmware has a bug with URLs ending in file extensions
+        # (e.g., .flac, .mp3). The dot is interpreted as a command delimiter.
+        # Workaround: append a trailing slash to the URL.
+        uri = media.uri
+        if not uri.endswith("/"):
+            uri = uri + "/"
+
+        self.logger.info("🎵 Playing URI: %s", uri)
+
+        # Use setPlayerCmd:play with the URL (no encoding needed for colons/slashes)
+        result = await self._send_command(f"setPlayerCmd:play:{uri}")
         self.logger.info("🎵 Play command result: %s", result)
 
         if result is None:
-            # Fallback to regular play command
-            self.logger.info("🎵 m3u play failed, trying regular play command")
-            result = await self._send_command(f"setPlayerCmd:play:{encoded_uri}")
-            self.logger.info("🎵 Regular play command result: %s", result)
+            self.logger.warning("🎵 Play command failed")
 
         self._attr_playback_state = PlaybackState.PLAYING
         self._attr_current_media = media
