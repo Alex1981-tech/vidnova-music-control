@@ -487,6 +487,12 @@ class ScheduleController(CoreController):
 
     async def _scheduler_loop(self) -> None:
         """Main scheduler loop - checks schedules periodically."""
+        # Wait for players to be registered before starting the scheduler
+        # This is important because player providers (like LinkPlay) need time
+        # to discover and register their devices
+        self.logger.info("Scheduler waiting 60 seconds for player registration...")
+        await asyncio.sleep(60)
+        self.logger.info("Scheduler starting checks...")
         while not self.mass.closing:
             try:
                 await self._check_schedules()
