@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  media-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: media-assistant-server:latest
+    container_name: media-assistant-server
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /root/.musicassistant:/data
+      - /root/.musicassistant/music:/data/music
+      - /root/.musicassistant/video:/data/video
+    environment:
+      - TZ=Europe/Kyiv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8095/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

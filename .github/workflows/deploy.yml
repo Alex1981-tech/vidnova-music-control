@@ -27,19 +27,42 @@ jobs:
             --exclude '.cache' \
             ./ /root/server-2.8.0.dev2026010704/
 
-      - name: Restart Media Assistant service
+      - name: Stop old container
         run: |
-          sudo systemctl restart media-assistant.service
-          sleep 5
-          sudo systemctl status media-assistant.service
+          sudo docker stop media-assistant-server 2>/dev/null || true
+          sudo docker rm media-assistant-server 2>/dev/null || true
+
+      - name: Build Docker image
+        run: |
+          cd /root/server-2.8.0.dev2026010704
+          sudo docker build -f Dockerfile.prod -t media-assistant-server:latest .
+
+      - name: Start container
+        run: |
+          sudo docker run -d \
+            --name media-assistant-server \
+            --restart unless-stopped \
+            --network host \
+            -v /root/.musicassistant:/data \
+            -e TZ=Europe/Kyiv \
+            media-assistant-server:latest
+
+      - name: Wait for container to start
+        run: |
+          echo "⏳ Waiting for Media Assistant to start..."
+          sleep 30
 
       - name: Verify deployment
         run: |
-          sleep 10
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8095/ || echo "000")
           if [ "$STATUS" = "200" ] || [ "$STATUS" = "101" ]; then
             echo "✅ Media Assistant is responding on port 8095"
           else
             echo "⚠️ Status: $STATUS - checking logs..."
-            sudo journalctl -u media-assistant.service --no-pager -n 30
+            sudo docker logs media-assistant-server --tail 50
           fi
+
+      - name: Cleanup
+        run: |
+          sudo docker image prune -f
+          echo "✅ Old images cleaned up"
