@@ -1,0 +1,10 @@
+{
+  "type": "player",
+  "domain": "linkplay",
+  "name": "LinkPlay/WiiM Players",
+  "description": "Support for LinkPlay/WiiM Audio devices (Arylic, Audio Pro, WiiM, etc.)",
+  "codeowners": ["@music-assistant"],
+  "requirements": ["aiohttp>=3.8.0"],
+  "documentation": "https://music-assistant.io/player-support/linkplay/",
+  "multi_instance": false
+}

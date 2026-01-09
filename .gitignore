@@ -1,0 +1,32 @@
+
+.DS_Store
+*.db
+*.pyc
+music_assistant/config.json
+*.cert
+*.pem
+music_assistant/testrun.sh
+build/
+dist/
+venv/
+.venv
+.venv*
+.mypy_cache/
+.tox/
+*.egg-info/
+*.spec
+.history
+.idea
+.coverage
+uv.lock
+
+# Production
+data/
+logs/
+*.log
+__pycache__/
+.cache/
+
+# Local files
+*.local
+.env

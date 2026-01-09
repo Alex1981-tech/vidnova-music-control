@@ -1,0 +1,45 @@
+name: Deploy Media Assistant Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sync code to server
+        run: |
+          rsync -av --delete \
+            --exclude '.git' \
+            --exclude 'data' \
+            --exclude 'logs' \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.cache' \
+            ./ /root/server-2.8.0.dev2026010704/
+
+      - name: Restart Media Assistant service
+        run: |
+          sudo systemctl restart media-assistant.service
+          sleep 5
+          sudo systemctl status media-assistant.service
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8095/ || echo "000")
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "101" ]; then
+            echo "✅ Media Assistant is responding on port 8095"
+          else
+            echo "⚠️ Status: $STATUS - checking logs..."
+            sudo journalctl -u media-assistant.service --no-pager -n 30
+          fi
