@@ -8,12 +8,15 @@ import aiohttp
 from music_assistant_models.enums import PlayerFeature, PlaybackState, PlayerType
 from music_assistant_models.player import DeviceInfo
 
+from music_assistant.constants import (
+    CONF_ENTRY_HTTP_PROFILE_DEFAULT_3,
+)
 from music_assistant.models.player import Player, PlayerMedia
 
 from .constants import LINKPLAY_DEFAULT_PORT, LINKPLAY_TIMEOUT
 
 if TYPE_CHECKING:
-    from music_assistant_models.config_entries import PlayerConfig
+    from music_assistant_models.config_entries import ConfigEntry, ConfigValueType, PlayerConfig
 
     from .provider import LinkPlayProvider
 
@@ -58,6 +61,20 @@ class LinkPlayPlayer(Player):
         self._attr_poll_interval = 5  # Poll every 5 seconds
         # Set initial volume level
         self._attr_volume_level = 50
+
+    async def get_config_entries(
+        self,
+        action: str | None = None,
+        values: dict[str, ConfigValueType] | None = None,
+    ) -> list[ConfigEntry]:
+        """Return all (provider/player specific) Config Entries for the player.
+
+        LinkPlay devices need forced_content_length HTTP profile to work properly.
+        """
+        return [
+            *await super().get_config_entries(action=action, values=values),
+            CONF_ENTRY_HTTP_PROFILE_DEFAULT_3,
+        ]
 
     async def power(self, powered: bool) -> None:
         """Send POWER command to player."""
