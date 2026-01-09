@@ -35,7 +35,7 @@ jobs:
       - name: Build Docker image
         run: |
           cd /root/server-2.8.0.dev2026010704
-          sudo docker build -f Dockerfile.prod -t media-assistant-server:latest .
+          sudo docker build --no-cache -f Dockerfile.prod -t media-assistant-server:latest .
 
       - name: Start container
         run: |
