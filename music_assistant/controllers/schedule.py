@@ -567,6 +567,9 @@ class ScheduleController(CoreController):
                         target_player=target_player_id,
                         player_ids_to_add=other_player_ids,
                     )
+                    # Give devices time to sync in multiroom mode
+                    self.logger.debug("Waiting for multiroom sync to complete...")
+                    await asyncio.sleep(3)
                 except Exception as exc:
                     self.logger.warning("Failed to group players: %s", exc)
 

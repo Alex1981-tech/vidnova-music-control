@@ -46,6 +46,7 @@ class LinkPlayPlayer(Player):
             PlayerFeature.VOLUME_SET,
             PlayerFeature.VOLUME_MUTE,
             PlayerFeature.PLAY_ANNOUNCEMENT,
+            PlayerFeature.SET_MEMBERS,
         }
         self._attr_device_info = DeviceInfo(
             model=device_info.get("model", "LinkPlay Device"),
@@ -100,16 +101,35 @@ class LinkPlayPlayer(Player):
 
     async def play_media(self, media: PlayerMedia) -> None:
         """Play media on the player."""
-        self.logger.warning("🎵 PLAY_MEDIA CALLED on %s: %s", self.display_name, media.uri)
+        import asyncio
+        from urllib.parse import quote
+
+        self.logger.info("🎵 PLAY_MEDIA CALLED on %s: %s", self.display_name, media.uri)
+
         # Stop current playback
         await self._send_command("setPlayerCmd:stop")
-        # Set URL to play
-        result = await self._send_command(f"setPlayerCmd:play:{media.uri}")
-        self.logger.warning("🎵 Play command result: %s", result)
+
+        # Small delay to allow stop to complete
+        await asyncio.sleep(0.5)
+
+        # URL-encode the media URI for the LinkPlay API
+        encoded_uri = quote(media.uri, safe=':/?&=')
+        self.logger.info("🎵 Playing encoded URI: %s", encoded_uri)
+
+        # Set URL to play using m3u command which is more reliable for streams
+        result = await self._send_command(f"setPlayerCmd:m3u:play:{encoded_uri}")
+        self.logger.info("🎵 Play command result: %s", result)
+
+        if result is None:
+            # Fallback to regular play command
+            self.logger.info("🎵 m3u play failed, trying regular play command")
+            result = await self._send_command(f"setPlayerCmd:play:{encoded_uri}")
+            self.logger.info("🎵 Regular play command result: %s", result)
+
         self._attr_playback_state = PlaybackState.PLAYING
         self._attr_current_media = media
         self.update_state()
-        self.logger.warning("🎵 Play media completed, state updated")
+        self.logger.info("🎵 Play media completed, state updated")
 
     async def poll(self) -> None:
         """Poll player for current status."""
@@ -208,3 +228,72 @@ class LinkPlayPlayer(Player):
 
         # Update current media (if needed)
         # Note: current_media is not a simple attribute, handle separately if needed
+
+    async def set_members(
+        self,
+        player_ids_to_add: list[str] | None = None,
+        player_ids_to_remove: list[str] | None = None,
+    ) -> None:
+        """Handle SET_MEMBERS command - group/ungroup LinkPlay devices for multiroom.
+
+        :param player_ids_to_add: List of player_id's to add to this multiroom group.
+        :param player_ids_to_remove: List of player_id's to remove from this multiroom group.
+        """
+        self.logger.info(
+            "set_members called on %s: add=%s, remove=%s",
+            self.display_name,
+            player_ids_to_add,
+            player_ids_to_remove,
+        )
+
+        # Handle adding players to multiroom group
+        if player_ids_to_add:
+            for player_id in player_ids_to_add:
+                slave_player = self.provider._players.get(player_id)
+                if not slave_player:
+                    self.logger.warning("Player %s not found in LinkPlay provider", player_id)
+                    continue
+
+                # Send join command to the slave device
+                # Command format: ConnectMasterAp:JoinGroupMaster:eth<master_ip>:wifi0.0.0.0
+                command = f"ConnectMasterAp:JoinGroupMaster:eth{self.ip_address}:wifi0.0.0.0"
+                self.logger.info(
+                    "Joining %s to master %s with command: %s",
+                    slave_player.display_name,
+                    self.display_name,
+                    command,
+                )
+                result = await slave_player._send_command(command)
+                self.logger.info("Join command result: %s", result)
+
+                # Update group members tracking
+                if not hasattr(self, "_group_member_ids"):
+                    self._group_member_ids = []
+                if player_id not in self._group_member_ids:
+                    self._group_member_ids.append(player_id)
+
+        # Handle removing players from multiroom group
+        if player_ids_to_remove:
+            for player_id in player_ids_to_remove:
+                slave_player = self.provider._players.get(player_id)
+                if not slave_player:
+                    self.logger.warning("Player %s not found in LinkPlay provider", player_id)
+                    continue
+
+                # Send kickout command from the master to remove the slave
+                # Command format: multiroom:SlaveKickout:<slave_ip>
+                command = f"multiroom:SlaveKickout:{slave_player.ip_address}"
+                self.logger.info(
+                    "Kicking %s from master %s with command: %s",
+                    slave_player.display_name,
+                    self.display_name,
+                    command,
+                )
+                result = await self._send_command(command)
+                self.logger.info("Kickout command result: %s", result)
+
+                # Update group members tracking
+                if hasattr(self, "_group_member_ids") and player_id in self._group_member_ids:
+                    self._group_member_ids.remove(player_id)
+
+        self.update_state()
