@@ -60,6 +60,8 @@ class ScheduleController(CoreController):
         self._active_schedules: set[str] = set()
         self._announcement_last_played: dict[str, dict[str, float]] = {}
         self._scheduler_task: asyncio.Task | None = None
+        # Track sync groups created for schedules: schedule_id -> group_player_id
+        self._schedule_groups: dict[str, str] = {}
         self.manifest.name = "Schedule controller"
         self.manifest.description = (
             "Music Assistant's core controller for scheduled music playback."
@@ -556,22 +558,55 @@ class ScheduleController(CoreController):
                         exc,
                     )
 
-            # Get the first player as the target queue
-            target_player_id = schedule.players[0].player_id
+            # Get all player IDs
+            all_player_ids = [p.player_id for p in schedule.players]
+            target_player_id = all_player_ids[0]
 
-            # If grouping is enabled and we have multiple players, sync them
+            # If grouping is enabled and we have multiple players, create a sync group
             if schedule.group_players and len(schedule.players) > 1:
-                other_player_ids = [p.player_id for p in schedule.players[1:]]
+                # Check if we already have a group for this schedule
+                existing_group_id = self._schedule_groups.get(schedule.schedule_id)
+                if existing_group_id:
+                    # Remove old group first
+                    try:
+                        await self.mass.players.remove_group_player(existing_group_id)
+                        self.logger.info("Removed old schedule group: %s", existing_group_id)
+                    except Exception as exc:
+                        self.logger.debug("Could not remove old group %s: %s", existing_group_id, exc)
+
+                # Determine provider from first player
+                first_player = self.mass.players.get(target_player_id)
+                if not first_player:
+                    self.logger.error("First player %s not found", target_player_id)
+                    return
+
+                provider_id = first_player.provider.instance_id
+
+                # Create new sync group named after the schedule
+                group_name = f"Schedule: {schedule.name}"
                 try:
-                    await self.mass.players.cmd_set_members(
-                        target_player=target_player_id,
-                        player_ids_to_add=other_player_ids,
+                    group_player = await self.mass.players.create_group_player(
+                        provider=provider_id,
+                        name=group_name,
+                        members=all_player_ids,
+                        dynamic=True,
                     )
-                    # Give devices time to sync in multiroom mode
-                    self.logger.debug("Waiting for multiroom sync to complete...")
-                    await asyncio.sleep(3)
+                    target_player_id = group_player.player_id
+                    self._schedule_groups[schedule.schedule_id] = target_player_id
+                    self.logger.info(
+                        "Created schedule sync group '%s' with ID %s for players: %s",
+                        group_name,
+                        target_player_id,
+                        all_player_ids,
+                    )
+                    # Give time for group to initialize
+                    await asyncio.sleep(2)
                 except Exception as exc:
-                    self.logger.warning("Failed to group players: %s", exc)
+                    self.logger.warning(
+                        "Failed to create sync group for schedule, falling back to first player: %s",
+                        exc,
+                    )
+                    target_player_id = all_player_ids[0]
 
             # Configure repeat mode if looping
             if schedule.loop_content:
@@ -582,6 +617,7 @@ class ScheduleController(CoreController):
                 await self.mass.player_queues.set_shuffle(target_player_id, True)
 
             # Start playback
+            self.logger.info("Starting playback on %s", target_player_id)
             await self.mass.player_queues.play_media(
                 queue_id=target_player_id,
                 media=schedule.media_items,
@@ -602,28 +638,43 @@ class ScheduleController(CoreController):
         self.logger.info("Stopping schedule: %s", schedule.name)
 
         try:
-            # Stop playback on all players
-            for player_setting in schedule.players:
+            # Check if we have a sync group for this schedule
+            group_player_id = self._schedule_groups.get(schedule.schedule_id)
+            if group_player_id:
+                # Stop the group player first
                 try:
-                    await self.mass.players.cmd_stop(player_setting.player_id)
+                    await self.mass.players.cmd_stop(group_player_id)
+                except Exception as exc:
+                    self.logger.warning("Failed to stop group player %s: %s", group_player_id, exc)
+
+                # Remove the sync group
+                try:
+                    await self.mass.players.remove_group_player(group_player_id)
+                    self.logger.info(
+                        "Removed schedule sync group: %s (schedule: %s)",
+                        group_player_id,
+                        schedule.name,
+                    )
                 except Exception as exc:
                     self.logger.warning(
-                        "Failed to stop player %s: %s",
-                        player_setting.player_id,
+                        "Failed to remove schedule group %s: %s",
+                        group_player_id,
                         exc,
                     )
-
-            # If players were grouped, ungroup them
-            if schedule.group_players and len(schedule.players) > 1:
-                target_player_id = schedule.players[0].player_id
-                other_player_ids = [p.player_id for p in schedule.players[1:]]
-                try:
-                    await self.mass.players.cmd_set_members(
-                        target_player=target_player_id,
-                        player_ids_to_remove=other_player_ids,
-                    )
-                except Exception as exc:
-                    self.logger.warning("Failed to ungroup players: %s", exc)
+                finally:
+                    # Clean up tracking dict
+                    self._schedule_groups.pop(schedule.schedule_id, None)
+            else:
+                # No group - stop individual players
+                for player_setting in schedule.players:
+                    try:
+                        await self.mass.players.cmd_stop(player_setting.player_id)
+                    except Exception as exc:
+                        self.logger.warning(
+                            "Failed to stop player %s: %s",
+                            player_setting.player_id,
+                            exc,
+                        )
 
         except Exception as exc:
             self.logger.exception("Failed to stop schedule %s: %s", schedule.schedule_id, exc)
