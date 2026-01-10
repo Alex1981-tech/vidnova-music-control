@@ -291,8 +291,8 @@ class LinkPlayPlayer(Player):
                     continue
 
                 # Send join command to the slave device
-                # Command format: ConnectMasterAp:JoinGroupMaster:eth<master_ip>:wifi0.0.0.0
-                command = f"ConnectMasterAp:JoinGroupMaster:eth{self.ip_address}:wifi0.0.0.0"
+                # Command format: ConnectMasterAp:JoinGroupMaster:eth<master_ip>:wifi<slave_ip>
+                command = f"ConnectMasterAp:JoinGroupMaster:eth{self.ip_address}:wifi{slave_player.ip_address}"
                 self.logger.info(
                     "Joining %s to master %s with command: %s",
                     slave_player.display_name,
