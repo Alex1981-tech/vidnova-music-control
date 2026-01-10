@@ -262,6 +262,8 @@ class LinkPlayPlayer(Player):
         :param player_ids_to_add: List of player_id's to add to this multiroom group.
         :param player_ids_to_remove: List of player_id's to remove from this multiroom group.
         """
+        import asyncio
+
         self.logger.info(
             "set_members called on %s: add=%s, remove=%s",
             self.display_name,
@@ -269,9 +271,20 @@ class LinkPlayPlayer(Player):
             player_ids_to_remove,
         )
 
+        members_changed = False
+
         # Handle adding players to multiroom group
         if player_ids_to_add:
+            # Initialize group member tracking if not exists
+            if not hasattr(self, "_group_member_ids"):
+                self._group_member_ids = []
+
             for player_id in player_ids_to_add:
+                # Skip if player is already in the group
+                if player_id in self._group_member_ids:
+                    self.logger.debug("Player %s already in group, skipping", player_id)
+                    continue
+
                 slave_player = self.provider._players.get(player_id)
                 if not slave_player:
                     self.logger.warning("Player %s not found in LinkPlay provider", player_id)
@@ -290,10 +303,8 @@ class LinkPlayPlayer(Player):
                 self.logger.info("Join command result: %s", result)
 
                 # Update group members tracking
-                if not hasattr(self, "_group_member_ids"):
-                    self._group_member_ids = []
-                if player_id not in self._group_member_ids:
-                    self._group_member_ids.append(player_id)
+                self._group_member_ids.append(player_id)
+                members_changed = True
 
         # Handle removing players from multiroom group
         if player_ids_to_remove:
@@ -318,5 +329,13 @@ class LinkPlayPlayer(Player):
                 # Update group members tracking
                 if hasattr(self, "_group_member_ids") and player_id in self._group_member_ids:
                     self._group_member_ids.remove(player_id)
+                    members_changed = True
+
+        # IMPORTANT: LinkPlay devices need time to establish the multiroom group
+        # Wait for the group to be fully formed before allowing playback commands
+        if members_changed:
+            self.logger.info("Waiting for multiroom group to stabilize...")
+            await asyncio.sleep(2.0)
+            self.logger.info("Multiroom group ready")
 
         self.update_state()
