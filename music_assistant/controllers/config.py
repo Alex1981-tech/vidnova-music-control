@@ -501,13 +501,15 @@ class ConfigController:
             if include_values
             else cast("PlayerConfig", PlayerConfig.parse([], raw_conf))
             for raw_conf in list(self.get(CONF_PLAYERS, {}).values())
+            # filter out configs without provider key (corrupted data)
+            if raw_conf.get("provider")
             # filter out unavailable providers (only if we requested the full info)
-            if (
+            and (
                 not include_values
-                or raw_conf["provider"] in get_global_cache_value("available_providers", [])
+                or raw_conf.get("provider") in get_global_cache_value("available_providers", [])
             )
             # optional provider filter
-            and (provider in (None, raw_conf["provider"]))
+            and (provider in (None, raw_conf.get("provider")))
         ]
 
     @api_command("config/players/get")
