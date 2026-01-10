@@ -334,12 +334,6 @@ class StreamsController(CoreController):
                     "/flow/{session_id}/{queue_id}/{queue_item_id}.{fmt}",
                     self.serve_queue_flow_stream,
                 ),
-                # LinkPlay devices need trailing slash to avoid dot-parsing issues
-                (
-                    "*",
-                    "/flow/{session_id}/{queue_id}/{queue_item_id}.{fmt}/",
-                    self.serve_queue_flow_stream,
-                ),
                 (
                     "*",
                     "/single/{session_id}/{queue_id}/{queue_item_id}.{fmt}",

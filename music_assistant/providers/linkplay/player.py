@@ -134,10 +134,11 @@ class LinkPlayPlayer(Player):
 
         # IMPORTANT: LinkPlay firmware has a bug with URLs ending in file extensions
         # (e.g., .flac, .mp3). The dot is interpreted as a command delimiter.
-        # Workaround: append a trailing slash to the URL.
+        # Workaround: append a query parameter to break the extension pattern.
+        # Note: trailing slash doesn't work with aiohttp routing.
         uri = media.uri
-        if not uri.endswith("/"):
-            uri = uri + "/"
+        if "?" not in uri:
+            uri = uri + "?linkplay=1"
 
         self.logger.info("🎵 Playing URI: %s", uri)
 
