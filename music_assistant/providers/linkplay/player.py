@@ -36,6 +36,7 @@ class LinkPlayPlayer(Player):
         self.ip_address = ip_address
         self._linkplay_device_info = device_info
         self._last_status = {}
+        self._play_start_time: float = 0  # Track when play was started
 
         # Set player attributes
         self._attr_type = PlayerType.PLAYER
@@ -119,6 +120,7 @@ class LinkPlayPlayer(Player):
     async def play_media(self, media: PlayerMedia) -> None:
         """Play media on the player."""
         import asyncio
+        import time
 
         self.logger.info("🎵 PLAY_MEDIA CALLED on %s: %s", self.display_name, media.uri)
 
@@ -130,7 +132,7 @@ class LinkPlayPlayer(Player):
 
         # Switch to wifi mode for URL streaming
         await self._send_command("setPlayerCmd:switchmode:wifi")
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.5)
 
         # IMPORTANT: LinkPlay firmware has a bug with URLs ending in file extensions
         # (e.g., .flac, .mp3). The dot is interpreted as a command delimiter.
@@ -148,6 +150,9 @@ class LinkPlayPlayer(Player):
 
         if result is None:
             self.logger.warning("🎵 Play command failed")
+
+        # Track when playback started - poll() will ignore "stop" status for 15 seconds
+        self._play_start_time = time.time()
 
         self._attr_playback_state = PlaybackState.PLAYING
         self._attr_current_media = media
@@ -225,6 +230,8 @@ class LinkPlayPlayer(Player):
 
     def _update_from_status(self, status: dict) -> None:
         """Update player state from status response."""
+        import time
+
         self._last_status = status
         self._attr_available = True
 
@@ -235,7 +242,16 @@ class LinkPlayPlayer(Player):
         elif play_status == "pause":
             self._attr_playback_state = PlaybackState.PAUSED
         else:
-            self._attr_playback_state = PlaybackState.IDLE
+            # Grace period: don't set to IDLE within 15 seconds of play_media
+            # LinkPlay devices take time to buffer and start playing
+            time_since_play = time.time() - self._play_start_time
+            if time_since_play < 15 and self._attr_playback_state == PlaybackState.PLAYING:
+                self.logger.debug(
+                    "Ignoring 'stop' status during grace period (%.1fs since play)",
+                    time_since_play,
+                )
+            else:
+                self._attr_playback_state = PlaybackState.IDLE
 
         # Update volume
         volume = status.get("vol", 0)
