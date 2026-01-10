@@ -37,6 +37,8 @@ class LinkPlayPlayer(Player):
         self._linkplay_device_info = device_info
         self._last_status = {}
         self._play_start_time: float = 0  # Track when play was started
+        self._is_multiroom_slave: bool = False  # Track if player is a slave in multiroom group
+        self._group_member_ids: list[str] = []  # Track group members if this player is master
 
         # Set player attributes
         self._attr_type = PlayerType.PLAYER
@@ -151,8 +153,21 @@ class LinkPlayPlayer(Player):
         if result is None:
             self.logger.warning("🎵 Play command failed")
 
-        # Track when playback started - poll() will ignore "stop" status for 15 seconds
-        self._play_start_time = time.time()
+        # Track when playback started - poll() will ignore "stop" status during grace period
+        play_time = time.time()
+        self._play_start_time = play_time
+
+        # Also set play_start_time on all group members (slaves)
+        # so they also get the grace period
+        if hasattr(self, "_group_member_ids"):
+            for member_id in self._group_member_ids:
+                member_player = self.provider._players.get(member_id)
+                if member_player:
+                    member_player._play_start_time = play_time
+                    member_player._attr_playback_state = PlaybackState.PLAYING
+                    self.logger.debug(
+                        "🎵 Set grace period on group member %s", member_player.display_name
+                    )
 
         self._attr_playback_state = PlaybackState.PLAYING
         self._attr_current_media = media
@@ -242,13 +257,19 @@ class LinkPlayPlayer(Player):
         elif play_status == "pause":
             self._attr_playback_state = PlaybackState.PAUSED
         else:
-            # Grace period: don't set to IDLE within 15 seconds of play_media
+            # Grace period: don't set to IDLE within N seconds of play_media
             # LinkPlay devices take time to buffer and start playing
+            # Use longer grace period (30s) for multiroom groups, 15s for single player
+            has_group_members = len(self._group_member_ids) > 0
+            is_in_group = has_group_members or self._is_multiroom_slave
+            grace_period = 30 if is_in_group else 15
             time_since_play = time.time() - self._play_start_time
-            if time_since_play < 15 and self._attr_playback_state == PlaybackState.PLAYING:
+            if time_since_play < grace_period and self._attr_playback_state == PlaybackState.PLAYING:
                 self.logger.debug(
-                    "Ignoring 'stop' status during grace period (%.1fs since play)",
+                    "Ignoring 'stop' status during grace period (%.1fs/%ds since play, group=%s)",
                     time_since_play,
+                    grace_period,
+                    is_in_group,
                 )
             else:
                 self._attr_playback_state = PlaybackState.IDLE
@@ -291,10 +312,6 @@ class LinkPlayPlayer(Player):
 
         # Handle adding players to multiroom group
         if player_ids_to_add:
-            # Initialize group member tracking if not exists
-            if not hasattr(self, "_group_member_ids"):
-                self._group_member_ids = []
-
             for player_id in player_ids_to_add:
                 # Skip if player is already in the group
                 if player_id in self._group_member_ids:
@@ -317,6 +334,9 @@ class LinkPlayPlayer(Player):
                 )
                 result = await slave_player._send_command(command)
                 self.logger.info("Join command result: %s", result)
+
+                # Mark slave as part of multiroom group
+                slave_player._is_multiroom_slave = True
 
                 # Update group members tracking
                 self._group_member_ids.append(player_id)
@@ -342,8 +362,11 @@ class LinkPlayPlayer(Player):
                 result = await self._send_command(command)
                 self.logger.info("Kickout command result: %s", result)
 
+                # Clear slave multiroom flag
+                slave_player._is_multiroom_slave = False
+
                 # Update group members tracking
-                if hasattr(self, "_group_member_ids") and player_id in self._group_member_ids:
+                if player_id in self._group_member_ids:
                     self._group_member_ids.remove(player_id)
                     members_changed = True
 
