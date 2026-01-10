@@ -12,9 +12,20 @@ env:
 jobs:
   deploy:
     name: Deploy to Production
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
 
     steps:
+      - name: Verify runner
+        run: |
+          echo "Running on: $(hostname)"
+          if [ ! -d "$DEPLOY_PATH" ]; then
+            echo "ERROR: Deploy path $DEPLOY_PATH not found!"
+            echo "This job is running on the wrong runner."
+            echo "Please add label 'music-assistant' to the correct runner in GitHub Settings."
+            exit 1
+          fi
+          echo "Deploy path verified: $DEPLOY_PATH"
+
       - name: Pull latest code
         run: |
           cd $DEPLOY_PATH
